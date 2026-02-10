@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5432/finance_db
+    url: jdbc:postgresql://localhost:5433/finance_db
     username: postgres
     password: pass
   jpa:
@@ -10,3 +10,11 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  jwt:
+    secret: ZmFrZV9kZWZhdWx0X3NlY3JldF9jaGFuZ2VfbWU= # base64-encoded secret; replace via env var APP_JWT_SECRET
+    expirationSeconds: 3600
+
+server:
+  port: 8081
