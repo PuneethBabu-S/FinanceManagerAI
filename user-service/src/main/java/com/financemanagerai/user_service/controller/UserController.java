@@ -68,8 +68,8 @@ public class UserController {
 
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/promote/{username}")
-    public ResponseEntity<UserResponseDTO> promoteToAdmin(@PathVariable String username) {
-        User promoted = userService.promoteToAdmin(username);
+    public ResponseEntity<UserResponseDTO> promoteToAdmin(@PathVariable String username, Authentication authentication) {
+        User promoted = userService.promoteToAdmin(username, authentication);
         return ResponseEntity.ok(UserResponseDTO.from(promoted));
     }
 

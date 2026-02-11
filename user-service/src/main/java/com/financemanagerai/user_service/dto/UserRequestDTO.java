@@ -32,6 +32,7 @@ public class UserRequestDTO {
                 .password(password)
                 .email(email)
                 .role(Role.USER)
+                .active(true)
                 .build();
     }
 }

@@ -14,6 +14,7 @@ public class UserResponseDTO {
     private String username;
     private String email;
     private String role;
+    private boolean active;
 
     public static UserResponseDTO from(User user) {
         return UserResponseDTO.builder()
@@ -21,6 +22,7 @@ public class UserResponseDTO {
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .role(user.getRole().name())
+                .active(user.isActive())
                 .build();
     }
 }

@@ -1,6 +1,5 @@
 package com.financemanagerai.user_service.service;
 
-import com.financemanagerai.user_service.dto.UserRequestDTO;
 import com.financemanagerai.user_service.entity.Role;
 import com.financemanagerai.user_service.entity.User;
 import com.financemanagerai.user_service.repository.UserRepository;
@@ -20,13 +19,13 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final AuditService auditService;
 
-    public UserService(UserRepository userRepository,
-                       PasswordEncoder passwordEncoder,
-                       JwtUtil jwtUtil) {
+    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder, JwtUtil jwtUtil, AuditService auditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.auditService = auditService;
     }
 
     public User registerUser(User user) {
@@ -54,14 +53,14 @@ public class UserService {
     }
 
     public String login(String username, String rawPassword) {
-        return userRepository.findByUsername(username)
+        return userRepository.findByUsernameAndActiveTrue(username)
                 .filter(user -> passwordEncoder.matches(rawPassword, user.getPassword()))
                 .map(user -> jwtUtil.generateToken(user.getUsername(), user.getRole().name()))
                 .orElseThrow(() -> new RuntimeException("Invalid credentials"));
     }
 
-    public User promoteToAdmin(String username) {
-        User user = userRepository.findByUsername(username)
+    public User promoteToAdmin(String username, Authentication authentication) {
+        User user = userRepository.findByUsernameAndActiveTrue(username)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         if (user.getRole() == Role.ADMIN) {
@@ -69,7 +68,9 @@ public class UserService {
         }
 
         user.setRole(Role.ADMIN);
-        return userRepository.save(user);
+        User updated = userRepository.save(user);
+        auditService.logAction("PROMOTE_USER", authentication.getName(), username);
+        return updated;
     }
 
     @Transactional
@@ -78,13 +79,15 @@ public class UserService {
         boolean isAdmin = authentication.getAuthorities().stream()
                 .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
 
-        if (isAdmin) {
-            userRepository.deleteByUsername(username);
+        User user = userRepository.findByUsernameAndActiveTrue(username)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (isAdmin || requester.equals(username)) {
+            user.setActive(false);
+            userRepository.save(user);
+            auditService.logAction("DELETE_USER", requester, username);
         } else {
-            if (!requester.equals(username)) {
-                throw new AccessDeniedException("You can only delete your own account");
-            }
-            userRepository.deleteByUsername(username);
+            throw new AccessDeniedException("You can only delete your own account");
         }
     }
 
