@@ -26,14 +26,12 @@ public class UserRequestDTO {
     @NotBlank
     private String email;
 
-    private Role role;
-
     public User toEntity() {
         return User.builder()
                 .username(username)
                 .password(password)
                 .email(email)
-                .role(role)
+                .role(Role.USER)
                 .build();
     }
 }

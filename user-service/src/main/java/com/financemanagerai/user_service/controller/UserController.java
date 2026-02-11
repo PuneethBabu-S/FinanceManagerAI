@@ -7,6 +7,7 @@ import com.financemanagerai.user_service.entity.User;
 import com.financemanagerai.user_service.service.UserService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
@@ -38,6 +39,7 @@ public class UserController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasRole('ADMIN')")
     @GetMapping
     public ResponseEntity<List<UserResponseDTO>> getAllUsers() {
         List<UserResponseDTO> users = userService.getAllUsers()
@@ -62,5 +64,18 @@ public class UserController {
                 .map(UserResponseDTO::from)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PreAuthorize("hasRole('ADMIN')")
+    @PutMapping("/promote/{username}")
+    public ResponseEntity<UserResponseDTO> promoteToAdmin(@PathVariable String username) {
+        User promoted = userService.promoteToAdmin(username);
+        return ResponseEntity.ok(UserResponseDTO.from(promoted));
+    }
+
+    @DeleteMapping("/delete/{username}")
+    public ResponseEntity<String> deleteUser(@PathVariable String username, Authentication authentication) {
+        userService.deleteUser(username, authentication);
+        return ResponseEntity.ok("User deleted successfully");
     }
 }
