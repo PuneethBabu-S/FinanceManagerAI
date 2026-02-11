@@ -9,7 +9,9 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/users")
@@ -45,12 +47,10 @@ public class UserController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<String> login(@Valid @RequestBody UserLoginDTO loginDto) {
-        boolean isValid = userService.validateLogin(loginDto.getUsername(), loginDto.getPassword());
-        if (isValid) {
-            return ResponseEntity.ok("Login successful");
-        } else {
-            return ResponseEntity.status(401).body("Invalid credentials");
-        }
+    public ResponseEntity<Map<String, String>> login(@Valid @RequestBody UserLoginDTO loginDto) {
+        String token = userService.login(loginDto.getUsername(), loginDto.getPassword());
+        Map<String, String> response = new HashMap<>();
+        response.put("token", token);
+        return ResponseEntity.ok(response);
     }
 }
