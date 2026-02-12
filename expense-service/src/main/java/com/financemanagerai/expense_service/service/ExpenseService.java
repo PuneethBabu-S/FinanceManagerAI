@@ -32,7 +32,7 @@ public class ExpenseService {
             throw new RuntimeException("You can only use your own categories");
         }
 
-        // Optional duplicate check
+        // Optional duplicate check (same date, category, amount, description)
         List<Expense> duplicates = expenseRepository.findByUsernameAndDateBetween(
                 requester, expense.getDate(), expense.getDate());
         boolean duplicateExists = duplicates.stream()
@@ -44,7 +44,9 @@ public class ExpenseService {
         }
 
         expense.setCategory(category);
-        expense.setUsername(requester);
+        expense.setUsername(requester); // owner of the expense
+        expense.setCreatedBy(requester); // audit
+        expense.setUpdatedBy(requester); // audit
         expense.setActive(true); // soft delete flag
         return expenseRepository.save(expense);
     }
@@ -65,6 +67,7 @@ public class ExpenseService {
         }
 
         expense.setActive(false);
+        expense.setUpdatedBy(requester); // audit
         expenseRepository.save(expense);
     }
 }

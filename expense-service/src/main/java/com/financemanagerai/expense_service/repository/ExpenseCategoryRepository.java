@@ -28,4 +28,8 @@ public interface ExpenseCategoryRepository extends JpaRepository<ExpenseCategory
     Optional<ExpenseCategory> findByNameAndActiveFalse(String name);
 
     List<ExpenseCategory> findByCreatedBy(String username);
+
+    List<ExpenseCategory> findByIsGlobalTrue();
+
+    List<ExpenseCategory> findByIsGlobalTrueAndActiveTrue();
 }

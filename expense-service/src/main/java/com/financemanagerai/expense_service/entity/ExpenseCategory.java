@@ -1,5 +1,6 @@
 package com.financemanagerai.expense_service.entity;
 
+import com.financemanagerai.expense_service.common.BaseEntity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -15,7 +16,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ExpenseCategory {
+public class ExpenseCategory extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -31,11 +32,6 @@ public class ExpenseCategory {
 
     @Column(nullable = false)
     private boolean isGlobal = false; // system-defined vs user-defined
-
-    @NotBlank
-    @Size(max = 50)
-    @Column(nullable = false, length = 50)
-    private String createdBy; // track who created (username or 'SYSTEM')
 
     @Column(nullable = false)
     private boolean active = true; // soft delete support

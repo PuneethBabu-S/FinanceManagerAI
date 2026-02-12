@@ -18,45 +18,45 @@ public class ExpenseCategoryService {
 
     // Create category (admin can create global, user can create personal)
     public ExpenseCategory createCategory(ExpenseCategory category, String requester, boolean isAdmin) {
-        // Rule: Only admins can create global categories
         if (category.isGlobal() && !isAdmin) {
             throw new RuntimeException("Only admins can create global categories");
         }
 
-        // Check for duplicate name
+        // Check for duplicate active category
         categoryRepository.findByNameAndActiveTrue(category.getName())
                 .ifPresent(existing -> {
                     throw new RuntimeException("Category with this name already exists and is active");
                 });
 
         // If inactive category exists with same name, reactivate instead of creating new
-        categoryRepository.findByNameAndActiveFalse(category.getName())
-                .ifPresent(inactive -> {
+        return categoryRepository.findByNameAndActiveFalse(category.getName())
+                .map(inactive -> {
                     inactive.setActive(true);
                     inactive.setDescription(category.getDescription());
                     inactive.setGlobal(category.isGlobal());
-                    inactive.setCreatedBy(isAdmin ? "ADMIN" : requester);
-                    categoryRepository.save(inactive);
-                    throw new RuntimeException("Category reactivated instead of creating duplicate");
+                    inactive.setUpdatedBy(requester); // requester always recorded
+                    return categoryRepository.save(inactive);
+                })
+                .orElseGet(() -> {
+                    category.setCreatedBy(requester);
+                    category.setUpdatedBy(requester);
+                    category.setActive(true);
+                    return categoryRepository.save(category);
                 });
-
-        category.setCreatedBy(isAdmin ? "ADMIN" : requester);
-        category.setActive(true);
-        return categoryRepository.save(category);
     }
 
     // List categories visible to a user (global + personal)
     public List<ExpenseCategory> listCategoriesForUser(String username, boolean includeInactive) {
         List<ExpenseCategory> globalCategories = includeInactive
-                ? categoryRepository.findAll()
-                : categoryRepository.findAllByActiveTrue();
+                ? categoryRepository.findByIsGlobalTrue()
+                : categoryRepository.findByIsGlobalTrueAndActiveTrue();
 
         List<ExpenseCategory> userCategories = includeInactive
                 ? categoryRepository.findByCreatedBy(username)
                 : categoryRepository.findByCreatedByAndActiveTrue(username);
 
         List<ExpenseCategory> allVisible = new ArrayList<>();
-        allVisible.addAll(globalCategories.stream().filter(ExpenseCategory::isGlobal).toList());
+        allVisible.addAll(globalCategories);
         allVisible.addAll(userCategories);
         return allVisible;
     }
@@ -75,6 +75,7 @@ public class ExpenseCategoryService {
         }
 
         category.setActive(false);
+        category.setUpdatedBy(requester); // requester always recorded
         categoryRepository.save(category);
     }
 }
