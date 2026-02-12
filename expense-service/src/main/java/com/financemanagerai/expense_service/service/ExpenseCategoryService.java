@@ -1,0 +1,80 @@
+package com.financemanagerai.expense_service.service;
+
+import com.financemanagerai.expense_service.entity.ExpenseCategory;
+import com.financemanagerai.expense_service.repository.ExpenseCategoryRepository;
+import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class ExpenseCategoryService {
+
+    private final ExpenseCategoryRepository categoryRepository;
+
+    public ExpenseCategoryService(ExpenseCategoryRepository categoryRepository) {
+        this.categoryRepository = categoryRepository;
+    }
+
+    // Create category (admin can create global, user can create personal)
+    public ExpenseCategory createCategory(ExpenseCategory category, String requester, boolean isAdmin) {
+        // Rule: Only admins can create global categories
+        if (category.isGlobal() && !isAdmin) {
+            throw new RuntimeException("Only admins can create global categories");
+        }
+
+        // Check for duplicate name
+        categoryRepository.findByNameAndActiveTrue(category.getName())
+                .ifPresent(existing -> {
+                    throw new RuntimeException("Category with this name already exists and is active");
+                });
+
+        // If inactive category exists with same name, reactivate instead of creating new
+        categoryRepository.findByNameAndActiveFalse(category.getName())
+                .ifPresent(inactive -> {
+                    inactive.setActive(true);
+                    inactive.setDescription(category.getDescription());
+                    inactive.setGlobal(category.isGlobal());
+                    inactive.setCreatedBy(isAdmin ? "ADMIN" : requester);
+                    categoryRepository.save(inactive);
+                    throw new RuntimeException("Category reactivated instead of creating duplicate");
+                });
+
+        category.setCreatedBy(isAdmin ? "ADMIN" : requester);
+        category.setActive(true);
+        return categoryRepository.save(category);
+    }
+
+    // List categories visible to a user (global + personal)
+    public List<ExpenseCategory> listCategoriesForUser(String username, boolean includeInactive) {
+        List<ExpenseCategory> globalCategories = includeInactive
+                ? categoryRepository.findAll()
+                : categoryRepository.findAllByActiveTrue();
+
+        List<ExpenseCategory> userCategories = includeInactive
+                ? categoryRepository.findByCreatedBy(username)
+                : categoryRepository.findByCreatedByAndActiveTrue(username);
+
+        List<ExpenseCategory> allVisible = new ArrayList<>();
+        allVisible.addAll(globalCategories.stream().filter(ExpenseCategory::isGlobal).toList());
+        allVisible.addAll(userCategories);
+        return allVisible;
+    }
+
+    // Soft delete category (only owner or admin)
+    public void deactivateCategory(Long id, String requester, boolean isAdmin) {
+        ExpenseCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Category not found"));
+
+        if (category.isGlobal() && !isAdmin) {
+            throw new RuntimeException("Only admins can deactivate global categories");
+        }
+
+        if (!isAdmin && !category.getCreatedBy().equals(requester)) {
+            throw new RuntimeException("Not allowed to delete this category");
+        }
+
+        category.setActive(false);
+        categoryRepository.save(category);
+    }
+}
