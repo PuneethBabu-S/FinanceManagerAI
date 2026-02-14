@@ -61,23 +61,19 @@ services:
       - esdata:/usr/share/elasticsearch/data
 
   keycloak:
-    image: quay.io/keycloak/keycloak:24.0.1
+    image: quay.io/keycloak/keycloak:26.0.0
     container_name: keycloak
-    command: start --optimized
     environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: postgres
-      KC_DB_PASSWORD: pass
-      KC_HOSTNAME: localhost
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
     ports:
       - "8080:8080"
-    depends_on:
-      - postgres
     volumes:
       - keycloakdata:/opt/keycloak/data
+    command:
+      - start-dev
+    depends_on:
+      - postgres
 
 volumes:
   pgdata:
