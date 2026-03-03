@@ -1,6 +1,6 @@
 package com.financemanagerai.genaisvc.controller;
 
-import com.financemanagerai.genaisvc.service.HuggingFaceService;
+import com.financemanagerai.genaisvc.service.GeminiService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -11,16 +11,16 @@ import java.util.Map;
 @RequestMapping("/genai")
 public class GenAiController {
 
-    private final HuggingFaceService hfService;
+    private final GeminiService geminiService;
 
-    public GenAiController(HuggingFaceService hfService) {
-        this.hfService = hfService;
+    public GenAiController(GeminiService geminiService) {
+        this.geminiService = geminiService;
     }
 
     @PostMapping("/query")
     public Map<String, String> handleQuery(@RequestBody Map<String, String> request) {
         String userQuery = request.get("query");
-        String aiResponse = hfService.getCompletion(userQuery);
+        String aiResponse = geminiService.getCompletion(userQuery);
 
         return Map.of(
                 "query", userQuery,
