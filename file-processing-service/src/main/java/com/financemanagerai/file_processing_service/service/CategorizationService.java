@@ -50,20 +50,26 @@ public class CategorizationService {
     }
 
     private String buildCategorizationPrompt(List<ExtractedTransactionDTO> transactions,
-                                            List<String> availableCategories) {
+                                              List<String> availableCategories) {
         StringBuilder prompt = new StringBuilder();
         prompt.append("You are a financial transaction categorizer. Categorize the following transactions into one of these categories: ");
         prompt.append(String.join(", ", availableCategories)).append("\n\n");
-        prompt.append("For each transaction, respond with ONLY the category name (nothing else).\n\n");
-        prompt.append("Transactions:\n");
+
+        // Tell the AI that the first row may contain headers; DON'T treat it separately in code
+        if (!transactions.isEmpty()) {
+            prompt.append("Note: The first row may contain column headers. If it does, use them to identify which column is the date, amount, description, merchant, etc. If the first row is not headers, treat all rows as data.\n\n");
+            prompt.append("Sample first row (possible headers or first data row): ").append(transactions.get(0).getRowValues()).append("\n\n");
+        }
+
+        prompt.append("For each transaction row, respond with ONLY the category name (nothing else).\n\n");
+        prompt.append("Transaction Data (rows):\n");
 
         for (int i = 0; i < transactions.size(); i++) {
             ExtractedTransactionDTO tx = transactions.get(i);
-            prompt.append(i + 1).append(". ");
-            prompt.append(tx.getDate()).append(" | ");
-            prompt.append(tx.getAmount()).append(" | ");
-            prompt.append(tx.getDescription()).append("\n");
+            prompt.append(i + 1).append(". ").append(tx.getRowValues()).append("\n");
         }
+
+        prompt.append("\nRespond with one category per line, in the same order as the rows above.\n");
 
         return prompt.toString();
     }
@@ -96,20 +102,23 @@ public class CategorizationService {
             List<String> availableCategories) {
 
         List<CategorizedTransactionDTO> result = new ArrayList<>();
-        String[] lines = categorizationResponse.split("\n");
+        String[] lines = categorizationResponse.split("\\r?\\n");
 
         for (int i = 0; i < transactions.size(); i++) {
             ExtractedTransactionDTO transaction = transactions.get(i);
-            String suggestedCategory = availableCategories.get(0); // default to first category
+            String suggestedCategory = availableCategories.isEmpty() ? "Others" : availableCategories.get(0);
 
             // Parse response line
             if (i < lines.length) {
                 String line = lines[i].trim();
 
-                // Extract category from response (e.g., "1. Groceries" -> "Groceries")
+                // Extract category from response (match available categories by prefix or exact)
                 String categoryName = extractCategoryFromLine(line, availableCategories);
                 if (categoryName != null) {
                     suggestedCategory = categoryName;
+                } else if (!line.isEmpty()) {
+                    // If AI returned a free-text category, use it as-is
+                    suggestedCategory = line;
                 }
             }
 
@@ -131,7 +140,7 @@ public class CategorizationService {
 
         // Check if line matches any available category
         for (String category : availableCategories) {
-            if (line.equalsIgnoreCase(category) || line.startsWith(category)) {
+            if (line.equalsIgnoreCase(category) || line.toLowerCase().startsWith(category.toLowerCase())) {
                 return category;
             }
         }

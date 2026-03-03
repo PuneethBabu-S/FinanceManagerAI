@@ -14,20 +14,20 @@ import java.util.UUID;
 @Service
 public class StatementProcessingService {
 
-    private final PDFExtractionService pdfExtractionService;
+    private final FileExtractionService fileExtractionService;
     private final CategorizationService categorizationService;
     private final ExpenseCreationService expenseCreationService;
 
-    public StatementProcessingService(PDFExtractionService pdfExtractionService,
+    public StatementProcessingService(FileExtractionService fileExtractionService,
                                       CategorizationService categorizationService,
                                       ExpenseCreationService expenseCreationService) {
-        this.pdfExtractionService = pdfExtractionService;
+        this.fileExtractionService = fileExtractionService;
         this.categorizationService = categorizationService;
         this.expenseCreationService = expenseCreationService;
     }
 
     /**
-     * Process a PDF statement: extract transactions, categorize them, and create expenses
+     * Process a statement file (CSV/Excel): extract transactions with headers, categorize them, and create expenses
      */
     public StatementProcessingResponseDTO processStatement(MultipartFile file,
                                                            String username,
@@ -36,8 +36,9 @@ public class StatementProcessingService {
         List<String> errors = new ArrayList<>();
 
         try {
-            // Step 1: Extract transactions from PDF
-            List<ExtractedTransactionDTO> extractedTransactions = pdfExtractionService.extractTransactionsFromPDF(file);
+            // Step 1: Extract transactions from file (CSV/Excel)
+            // First entry will be headers so AI understands the columns
+            List<ExtractedTransactionDTO> extractedTransactions = fileExtractionService.extractTransactions(file);
 
             if (extractedTransactions.isEmpty()) {
                 return StatementProcessingResponseDTO.builder()
@@ -46,33 +47,53 @@ public class StatementProcessingService {
                         .totalTransactionsExtracted(0L)
                         .totalTransactionsCategorized(0L)
                         .totalExpensesCreated(0L)
-                        .message("No transactions found in the PDF")
+                        .message("No transactions found in the file")
                         .errors(errors)
                         .build();
             }
 
-            // Step 2: Get available categories
-            List<String> availableCategories = expenseCreationService.getAvailableCategories(username, token);
+            // Log extracted data including headers
+            System.out.println("Extracted " + extractedTransactions.size() + " rows from file (including headers).");
+            for (int i = 0; i < extractedTransactions.size(); i++) {
+                ExtractedTransactionDTO row = extractedTransactions.get(i);
+                if (row.isHeaderRow()) {
+                    System.out.println("[HEADERS] " + row.getRowValues());
+                } else {
+                    System.out.println("[ROW " + i + "] " + row.getRowValues());
+                }
+            }
 
-            // Step 3: Batch categorize transactions
-            List<CategorizedTransactionDTO> categorizedTransactions =
-                    categorizationService.categorizeBatch(extractedTransactions, availableCategories);
-
-            // Step 4: Create expenses in expense service
-            List<Long> createdExpenseIds = expenseCreationService.createExpensesBatch(categorizedTransactions, username, token);
-
+//            // Step 2: Get available categories
+//            List<String> availableCategories = expenseCreationService.getAvailableCategories(username, token);
+//
+//            // Step 3: Batch categorize transactions (headers will help AI understand context)
+//            List<CategorizedTransactionDTO> categorizedTransactions =
+//                    categorizationService.categorizeBatch(extractedTransactions, availableCategories);
+//
+//            // Step 4: Create expenses in expense service
+//            List<Long> createdExpenseIds = expenseCreationService.createExpensesBatch(categorizedTransactions, username, token);
+//
+//            return StatementProcessingResponseDTO.builder()
+//                    .statementId(statementId)
+//                    .status("COMPLETED")
+//                    .totalTransactionsExtracted((long) extractedTransactions.size() - 1) // -1 for header row
+//                    .totalTransactionsCategorized((long) categorizedTransactions.size())
+//                    .totalExpensesCreated((long) createdExpenseIds.size())
+//                    .message("Statement processed successfully")
+//                    .errors(errors)
+//                    .build();
             return StatementProcessingResponseDTO.builder()
                     .statementId(statementId)
-                    .status("COMPLETED")
-                    .totalTransactionsExtracted((long) extractedTransactions.size())
-                    .totalTransactionsCategorized((long) categorizedTransactions.size())
-                    .totalExpensesCreated((long) createdExpenseIds.size())
-                    .message("Statement processed successfully")
+                    .status("EXTRACTED")
+                    .totalTransactionsExtracted((long) extractedTransactions.size() - 1) // -1 for header row
+                    .totalTransactionsCategorized(0L)
+                    .totalExpensesCreated(0L)
+                    .message("Statement extracted successfully, ready for categorization")
                     .errors(errors)
                     .build();
 
         } catch (IOException e) {
-            errors.add("PDF extraction failed: " + e.getMessage());
+            errors.add("File extraction failed: " + e.getMessage());
             return buildFailureResponse(statementId, errors);
         } catch (Exception e) {
             errors.add("Statement processing failed: " + e.getMessage());
@@ -83,22 +104,22 @@ public class StatementProcessingService {
     /**
      * Process multiple transactions in batches for categorization
      */
-    public List<CategorizedTransactionDTO> categorizeBatch(List<ExtractedTransactionDTO> transactions,
-                                                          List<String> availableCategories) {
-        int batchSize = 20;
-        List<CategorizedTransactionDTO> allCategorized = new ArrayList<>();
-
-        for (int i = 0; i < transactions.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, transactions.size());
-            List<ExtractedTransactionDTO> batch = transactions.subList(i, end);
-
-            List<CategorizedTransactionDTO> categorized = categorizationService.categorizeBatch(batch, availableCategories);
-            allCategorized.addAll(categorized);
-        }
-
-        return allCategorized;
-    }
-
+//    public List<CategorizedTransactionDTO> categorizeBatch(List<ExtractedTransactionDTO> transactions,
+//                                                          List<String> availableCategories) {
+//        int batchSize = 20;
+//        List<CategorizedTransactionDTO> allCategorized = new ArrayList<>();
+//
+//        for (int i = 0; i < transactions.size(); i += batchSize) {
+//            int end = Math.min(i + batchSize, transactions.size());
+//            List<ExtractedTransactionDTO> batch = transactions.subList(i, end);
+//
+//            List<CategorizedTransactionDTO> categorized = categorizationService.categorizeBatch(batch, availableCategories);
+//            allCategorized.addAll(categorized);
+//        }
+//
+//        return allCategorized;
+//    }
+//
     private StatementProcessingResponseDTO buildFailureResponse(String statementId, List<String> errors) {
         return StatementProcessingResponseDTO.builder()
                 .statementId(statementId)

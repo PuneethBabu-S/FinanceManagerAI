@@ -1,12 +1,15 @@
 package com.financemanagerai.file_processing_service.service;
 
 import com.financemanagerai.file_processing_service.dto.ExtractedTransactionDTO;
+import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -36,18 +39,31 @@ public class PDFExtractionService {
     public List<ExtractedTransactionDTO> extractTransactionsFromPDF(MultipartFile file) throws IOException {
         List<ExtractedTransactionDTO> transactions = new ArrayList<>();
 
-        try (PDDocument document = PDDocument.load(file.getBytes())) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            String pdfText = stripper.getText(document);
+        // Create temporary file to store PDF bytes
+        Path tempFile = Files.createTempFile("pdf_", ".tmp");
 
-            // Extract transactions from text
-            String[] lines = pdfText.split("\n");
-            for (String line : lines) {
-                ExtractedTransactionDTO transaction = parseTransactionLine(line);
-                if (transaction != null) {
-                    transactions.add(transaction);
+        try {
+            Files.write(tempFile, file.getBytes());
+
+            // Load PDF using Loader - PDFBox 3.0 API
+            try (PDDocument document = Loader.loadPDF(tempFile.toFile())) {
+                PDFTextStripper stripper = new PDFTextStripper();
+                String pdfText = stripper.getText(document);
+
+                // Extract transactions from text
+                String[] lines = pdfText.split("\n");
+                for (String line : lines) {
+                    ExtractedTransactionDTO transaction = parseTransactionLine(line);
+                    if (transaction != null) {
+                        transactions.add(transaction);
+                    }
                 }
             }
+        } catch (Exception e) {
+            throw new IOException("Error processing PDF: " + e.getMessage(), e);
+        } finally {
+            // Clean up temporary file
+            Files.deleteIfExists(tempFile);
         }
 
         return transactions;
