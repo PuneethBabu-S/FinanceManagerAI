@@ -1,0 +1,46 @@
+# Gradle
+.gradle/
+build/
+*.gradle.lock
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+out/
+
+# Visual Studio Code
+.vscode/
+*.code-workspace
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.classpath
+.project
+.settings/
+
+# Compiled files
+*.class
+*.jar
+*.war
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.local
+
