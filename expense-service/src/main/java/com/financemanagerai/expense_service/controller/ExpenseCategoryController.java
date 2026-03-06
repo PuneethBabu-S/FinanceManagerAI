@@ -27,7 +27,7 @@ public class ExpenseCategoryController {
     private boolean isAdmin(Authentication authentication) {
         return authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
-                .anyMatch(role -> role.equals("ROLE_ADMIN"));
+                .anyMatch(role -> role.equals("ROLE_ADMIN") || role.equals("ADMIN"));
     }
 
     @PostMapping

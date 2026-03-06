@@ -73,9 +73,10 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - keycloakdata:/opt/keycloak/data
+      - ./finance-manager-realm.json:/opt/keycloak/data/import/finance-manager-realm.json
     command:
       - start-dev
+      - --import-realm
     depends_on:
       - postgres
 

@@ -43,7 +43,8 @@ This project demonstrates backend mastery, system design, cloud deployment (late
 
 **Security**
 
-- OAuth2, JWT
+- OAuth2, JWT (Keycloak)
+- Role-based access control (RBAC)
 
 **Monitoring**
 
@@ -79,13 +80,23 @@ This project demonstrates backend mastery, system design, cloud deployment (late
    ```
 
 3. **Access services locally**
+   - Keycloak → `http://localhost:8080` (admin/admin)
    - PostgreSQL → `localhost:5432` (user: postgres, password: pass)
    - MongoDB → `localhost:27017`
    - Redis → `localhost:6379`
    - Kafka → `localhost:9092`
    - Elasticsearch → `http://localhost:9200`
 
-4. **Microservices folders**
+4. **Authentication Setup**
+   
+   See [KEYCLOAK_QUICK_REF.md](./KEYCLOAK_QUICK_REF.md) for quick start or [KEYCLOAK_AUTH_SETUP.md](./KEYCLOAK_AUTH_SETUP.md) for complete guide.
+   
+   Quick test:
+   ```powershell
+   .\test-keycloak-auth.ps1
+   ```
+
+5. **Microservices folders**
    ```
    /user-service
    /expense-service
