@@ -110,4 +110,78 @@ public class ExpenseCategoryService {
         }
         categoryRepository.save(category);
     }
+
+    /**
+     * Reactivates an inactive category.
+     * Optionally reactivates all subcategories recursively.
+     */
+    @Transactional
+    public ExpenseCategory reactivateCategory(Long id, String requester, boolean isAdmin, boolean recursive) {
+        ExpenseCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
+
+        if (!isAdmin && !category.getCreatedBy().equals(requester)) {
+            throw new UnauthorizedException("Permission denied");
+        }
+
+        reactivateRecursive(category, requester, recursive);
+        return categoryRepository.save(category);
+    }
+
+    private void reactivateRecursive(ExpenseCategory category, String requester, boolean recursive) {
+        category.setActive(true);
+        category.setUpdatedBy(requester);
+
+        if (recursive && category.getSubcategories() != null) {
+            for (ExpenseCategory sub : category.getSubcategories()) {
+                reactivateRecursive(sub, requester, true);
+            }
+        }
+    }
+
+    @Transactional
+    public ExpenseCategory updateCategory(Long id, String name, String description, Long parentId, String requester, boolean isAdmin) {
+        ExpenseCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found with id: " + id));
+
+        // Security Check
+        if (category.isGlobal() && !isAdmin) {
+            throw new UnauthorizedException("Only admins can edit global categories");
+        }
+        if (!isAdmin && !category.getCreatedBy().equals(requester)) {
+            throw new UnauthorizedException("You do not have permission to edit this category");
+        }
+
+        // Update fields
+        category.setName(name);
+        category.setDescription(description);
+        category.setUpdatedBy(requester);
+
+        // Handle Hierarchy Change
+        if (parentId != null) {
+            if (parentId.equals(id)) {
+                throw new IllegalArgumentException("A category cannot be its own parent");
+            }
+
+            // Business Logic: Check if the new parent is actually a child of the current category
+            // (Prevents cutting off a branch and losing it in a circular loop)
+            if (isChildOf(category, parentId)) {
+                throw new IllegalArgumentException("Cannot move a category into its own subcategory");
+            }
+
+            ExpenseCategory newParent = categoryRepository.findById(parentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("New parent category not found"));
+            category.setParent(newParent);
+        } else {
+            category.setParent(null);
+        }
+
+        return categoryRepository.save(category);
+    }
+
+    // Helper to prevent deep circular nesting
+    private boolean isChildOf(ExpenseCategory root, Long targetId) {
+        return root.getSubcategories().stream()
+                .anyMatch(sub -> sub.getId().equals(targetId) || isChildOf(sub, targetId));
+    }
 }

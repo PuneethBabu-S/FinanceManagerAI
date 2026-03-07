@@ -64,6 +64,38 @@ public class ExpenseCategoryController {
         return categories.stream().map(ExpenseCategoryResponseDTO::from).toList();
     }
 
+    @PutMapping("/{id}")
+    public ExpenseCategoryResponseDTO updateCategory(@PathVariable Long id,
+                                                     @RequestBody ExpenseCategoryRequestDTO request,
+                                                     Authentication authentication) {
+        ExpenseCategory updated = categoryService.updateCategory(
+                id,
+                request.getName(),
+                request.getDescription(),
+                request.getParentId(),
+                getRequester(authentication),
+                isAdmin(authentication)
+        );
+        return ExpenseCategoryResponseDTO.from(updated);
+    }
+
+    /**
+     * Reactivate an inactive category.
+     * Uses @PatchMapping as we are only updating the 'active' state.
+     */
+    @PatchMapping("/{id}/reactivate")
+    public ExpenseCategoryResponseDTO reactivateCategory(@PathVariable Long id,
+                                                         @RequestParam(defaultValue = "false") boolean recursive,
+                                                         Authentication authentication) {
+        ExpenseCategory reactivated = categoryService.reactivateCategory(
+                id,
+                getRequester(authentication),
+                isAdmin(authentication),
+                recursive
+        );
+        return ExpenseCategoryResponseDTO.from(reactivated);
+    }
+
     @DeleteMapping("/{id}")
     public void deactivateCategory(@PathVariable Long id,
                                    Authentication authentication) {
