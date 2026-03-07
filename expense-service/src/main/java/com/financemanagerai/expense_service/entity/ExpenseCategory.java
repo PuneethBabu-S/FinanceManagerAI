@@ -28,19 +28,25 @@ public class ExpenseCategory extends BaseEntity {
     private String name;
 
     @Size(max = 255)
-    private String description; // explains purpose of category
+    private String description;
 
     @Column(nullable = false)
-    private boolean isGlobal = false; // system-defined vs user-defined
+    private boolean isGlobal = false;
 
     @Column(nullable = false)
-    private boolean active = true; // soft delete support
+    private boolean active = true;
 
     // Self-referencing hierarchy
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
     private ExpenseCategory parent;
 
-    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL)
+    @Builder.Default
+    @OneToMany(mappedBy = "parent", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ExpenseCategory> subcategories = new ArrayList<>();
+
+    public void addSubcategory(ExpenseCategory subcategory) {
+        subcategories.add(subcategory);
+        subcategory.setParent(this);
+    }
 }

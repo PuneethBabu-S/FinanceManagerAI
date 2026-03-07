@@ -37,17 +37,30 @@ public class ExpenseCategoryController {
         boolean admin = isAdmin(authentication);
 
         ExpenseCategory category = request.toEntity();
-        ExpenseCategory saved = categoryService.createCategory(category, requester, admin);
+
+        ExpenseCategory saved = categoryService.createCategory(
+                category,
+                request.getParentId(),
+                requester,
+                admin
+        );
 
         return ExpenseCategoryResponseDTO.from(saved);
     }
 
     @GetMapping
     public List<ExpenseCategoryResponseDTO> listCategories(Authentication authentication,
-                                                           @RequestParam(defaultValue = "false") boolean includeInactive) {
+                                                           @RequestParam(defaultValue = "false") boolean includeInactive,
+                                                           @RequestParam(defaultValue = "false") boolean treeView) {
         String requester = getRequester(authentication);
-        List<ExpenseCategory> categories = categoryService.listCategoriesForUser(requester, includeInactive);
 
+        if (treeView) {
+            List<ExpenseCategory> rootCategories = categoryService.listRootCategoriesForUser(requester, includeInactive);
+            return rootCategories.stream().map(ExpenseCategoryResponseDTO::from).toList();
+        }
+
+        // Standard flat list fetch
+        List<ExpenseCategory> categories = categoryService.listCategoriesForUser(requester, includeInactive);
         return categories.stream().map(ExpenseCategoryResponseDTO::from).toList();
     }
 

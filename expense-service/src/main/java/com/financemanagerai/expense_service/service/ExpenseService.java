@@ -2,6 +2,9 @@ package com.financemanagerai.expense_service.service;
 
 import com.financemanagerai.expense_service.entity.Expense;
 import com.financemanagerai.expense_service.entity.ExpenseCategory;
+import com.financemanagerai.expense_service.exception.CategoryAlreadyExistsException;
+import com.financemanagerai.expense_service.exception.ResourceNotFoundException;
+import com.financemanagerai.expense_service.exception.UnauthorizedException;
 import com.financemanagerai.expense_service.repository.ExpenseCategoryRepository;
 import com.financemanagerai.expense_service.repository.ExpenseRepository;
 import org.springframework.stereotype.Service;
@@ -23,13 +26,13 @@ public class ExpenseService {
     // Add expense (must belong to active category visible to requester)
     public Expense addExpense(Expense expense, Long categoryId, String requester, boolean isAdmin) {
         ExpenseCategory category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
         if (!category.isActive()) {
-            throw new RuntimeException("Cannot add expense to inactive category");
+            throw new IllegalStateException("Cannot add expense to inactive category");
         }
         if (!category.isGlobal() && !category.getCreatedBy().equals(requester)) {
-            throw new RuntimeException("You can only use your own categories");
+            throw new UnauthorizedException("You can only use your own categories");
         }
 
         // Optional duplicate check (same date, category, amount, description)
@@ -40,7 +43,7 @@ public class ExpenseService {
                         e.getAmount().equals(expense.getAmount()) &&
                         e.getDescription().equals(expense.getDescription()));
         if (duplicateExists) {
-            throw new RuntimeException("Duplicate expense detected");
+            throw new CategoryAlreadyExistsException("Duplicate expense detected");
         }
 
         expense.setCategory(category);
@@ -60,10 +63,10 @@ public class ExpenseService {
     // Soft delete expense (only owner or admin)
     public void deactivateExpense(Long expenseId, String requester, boolean isAdmin) {
         Expense expense = expenseRepository.findById(expenseId)
-                .orElseThrow(() -> new RuntimeException("Expense not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Expense not found"));
 
         if (!isAdmin && !expense.getUsername().equals(requester)) {
-            throw new RuntimeException("Not allowed to delete this expense");
+            throw new UnauthorizedException("Not allowed to delete this expense");
         }
 
         expense.setActive(false);

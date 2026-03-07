@@ -1,51 +1,57 @@
 package com.financemanagerai.expense_service.service;
 
 import com.financemanagerai.expense_service.entity.ExpenseCategory;
+import com.financemanagerai.expense_service.exception.CategoryAlreadyExistsException;
+import com.financemanagerai.expense_service.exception.ResourceNotFoundException;
+import com.financemanagerai.expense_service.exception.UnauthorizedException;
 import com.financemanagerai.expense_service.repository.ExpenseCategoryRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
+@RequiredArgsConstructor // Automatically creates constructor for final fields
 public class ExpenseCategoryService {
 
     private final ExpenseCategoryRepository categoryRepository;
 
-    public ExpenseCategoryService(ExpenseCategoryRepository categoryRepository) {
-        this.categoryRepository = categoryRepository;
-    }
-
-    // Create category (admin can create global, user can create personal)
-    public ExpenseCategory createCategory(ExpenseCategory category, String requester, boolean isAdmin) {
+    /**
+     * Creates a new category or links a subcategory to a parent.
+     */
+    @Transactional
+    public ExpenseCategory createCategory(ExpenseCategory category, Long parentId, String requester, boolean isAdmin) {
         if (category.isGlobal() && !isAdmin) {
-            throw new RuntimeException("Only admins can create global categories");
+            throw new UnauthorizedException("Only admins can create global categories");
         }
 
-        // Check for duplicate active category
+        // Handle Hierarchy Link
+        if (parentId != null) {
+            ExpenseCategory parent = categoryRepository.findById(parentId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Parent category not found with id: " + parentId));
+            category.setParent(parent);
+        }
+
+        // Duplicate Check
         categoryRepository.findByNameAndActiveTrue(category.getName())
                 .ifPresent(existing -> {
-                    throw new RuntimeException("Category with this name already exists and is active");
+                    throw new CategoryAlreadyExistsException("Category with this name already exists and is active");
                 });
 
-        // If inactive category exists with same name, reactivate instead of creating new
-        return categoryRepository.findByNameAndActiveFalse(category.getName())
-                .map(inactive -> {
-                    inactive.setActive(true);
-                    inactive.setDescription(category.getDescription());
-                    inactive.setGlobal(category.isGlobal());
-                    inactive.setUpdatedBy(requester); // requester always recorded
-                    return categoryRepository.save(inactive);
-                })
-                .orElseGet(() -> {
-                    category.setCreatedBy(requester);
-                    category.setUpdatedBy(requester);
-                    category.setActive(true);
-                    return categoryRepository.save(category);
-                });
+        category.setCreatedBy(requester);
+        category.setUpdatedBy(requester);
+        category.setActive(true);
+
+        return categoryRepository.save(category);
     }
 
-    // List categories visible to a user (global + personal)
+    /**
+     * Fixes the "cannot find symbol" error.
+     * Returns a flat list of all categories the user has access to.
+     */
     public List<ExpenseCategory> listCategoriesForUser(String username, boolean includeInactive) {
         List<ExpenseCategory> globalCategories = includeInactive
                 ? categoryRepository.findByIsGlobalTrue()
@@ -58,24 +64,50 @@ public class ExpenseCategoryService {
         List<ExpenseCategory> allVisible = new ArrayList<>();
         allVisible.addAll(globalCategories);
         allVisible.addAll(userCategories);
+
         return allVisible;
     }
 
-    // Soft delete category (only owner or admin)
+    /**
+     * Returns only Top-Level (Root) categories for the hierarchical Tree View.
+     */
+    public List<ExpenseCategory> listRootCategoriesForUser(String username, boolean includeInactive) {
+        List<ExpenseCategory> all = listCategoriesForUser(username, includeInactive);
+
+        // Filter for categories that have no parent (the roots)
+        return all.stream()
+                .filter(c -> c.getParent() == null)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Soft delete/deactivate a category and all its children.
+     */
+    @Transactional
     public void deactivateCategory(Long id, String requester, boolean isAdmin) {
         ExpenseCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Category not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Category not found"));
 
         if (category.isGlobal() && !isAdmin) {
-            throw new RuntimeException("Only admins can deactivate global categories");
+            throw new UnauthorizedException("Only admins can deactivate global categories");
         }
 
         if (!isAdmin && !category.getCreatedBy().equals(requester)) {
-            throw new RuntimeException("Not allowed to delete this category");
+            throw new UnauthorizedException("Not allowed to delete this category");
         }
 
+        deactivateRecursive(category, requester);
+    }
+
+    private void deactivateRecursive(ExpenseCategory category, String requester) {
         category.setActive(false);
-        category.setUpdatedBy(requester); // requester always recorded
+        category.setUpdatedBy(requester);
+
+        if (category.getSubcategories() != null) {
+            for (ExpenseCategory sub : category.getSubcategories()) {
+                deactivateRecursive(sub, requester);
+            }
+        }
         categoryRepository.save(category);
     }
 }
