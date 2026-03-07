@@ -147,12 +147,122 @@ public class FileExtractionService {
         }
 
         String lower = filename.toLowerCase();
+        List<ExtractedTransactionDTO> transactions;
+
         if (lower.endsWith(".csv")) {
-            return extractTransactionsFromCSV(file);
+            transactions = extractTransactionsFromCSV(file);
         } else if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-            return extractTransactionsFromExcel(file);
+            transactions = extractTransactionsFromExcel(file);
         } else {
             throw new IOException("Unsupported file format. Please use CSV or Excel (.xlsx/.xls) files");
         }
+
+        // Map columns to fields
+        mapColumnsToFields(transactions);
+
+        return transactions;
+    }
+
+    /**
+     * Map column values to transaction fields based on header row
+     */
+    private void mapColumnsToFields(List<ExtractedTransactionDTO> transactions) {
+        if (transactions.isEmpty()) {
+            return;
+        }
+
+        // Get header row
+        ExtractedTransactionDTO headerRow = transactions.stream()
+                .filter(ExtractedTransactionDTO::isHeaderRow)
+                .findFirst()
+                .orElse(null);
+
+        if (headerRow == null || headerRow.getRowValues() == null) {
+            return;
+        }
+
+        // Create column index map (case-insensitive)
+        Map<String, Integer> columnMap = new HashMap<>();
+        List<String> headers = headerRow.getRowValues();
+
+        for (int i = 0; i < headers.size(); i++) {
+            String header = headers.get(i).trim().toLowerCase();
+            columnMap.put(header, i);
+        }
+
+        // Map fields for each data row
+        for (ExtractedTransactionDTO transaction : transactions) {
+            if (transaction.isHeaderRow()) {
+                continue; // Skip header row
+            }
+
+            List<String> values = transaction.getRowValues();
+            if (values == null || values.isEmpty()) {
+                continue;
+            }
+
+            // Map Date
+            Integer dateIdx = findColumnIndex(columnMap, "date");
+            if (dateIdx != null && dateIdx < values.size()) {
+                String dateStr = values.get(dateIdx).trim();
+                if (!dateStr.isEmpty()) {
+                    try {
+                        transaction.setDate(java.time.LocalDate.parse(dateStr));
+                    } catch (Exception e) {
+                        // Keep as null if parsing fails
+                    }
+                }
+            }
+
+            // Map Amount
+            Integer amountIdx = findColumnIndex(columnMap, "amount");
+            if (amountIdx != null && amountIdx < values.size()) {
+                String amountStr = values.get(amountIdx).trim();
+                if (!amountStr.isEmpty()) {
+                    try {
+                        transaction.setAmount(Double.parseDouble(amountStr));
+                    } catch (Exception e) {
+                        // Keep as null if parsing fails
+                    }
+                }
+            }
+
+            // Map Description
+            Integer descIdx = findColumnIndex(columnMap, "description");
+            if (descIdx != null && descIdx < values.size()) {
+                transaction.setDescription(values.get(descIdx).trim());
+            }
+
+            // Map Merchant (try "merchant" or "vendor")
+            Integer merchantIdx = findColumnIndex(columnMap, "merchant", "vendor");
+            if (merchantIdx != null && merchantIdx < values.size()) {
+                transaction.setMerchant(values.get(merchantIdx).trim());
+            }
+
+            // Map Payment Method
+            Integer paymentIdx = findColumnIndex(columnMap, "payment method", "payment_method", "paymentmethod", "payment");
+            if (paymentIdx != null && paymentIdx < values.size()) {
+                transaction.setPaymentMethod(values.get(paymentIdx).trim());
+            }
+
+            // Map Currency
+            Integer currencyIdx = findColumnIndex(columnMap, "currency");
+            if (currencyIdx != null && currencyIdx < values.size()) {
+                transaction.setCurrency(values.get(currencyIdx).trim());
+            }
+        }
+    }
+
+    /**
+     * Find column index by trying multiple possible header names
+     */
+    private Integer findColumnIndex(Map<String, Integer> columnMap, String... possibleNames) {
+        for (String name : possibleNames) {
+            Integer idx = columnMap.get(name.toLowerCase());
+            if (idx != null) {
+                return idx;
+            }
+        }
+        return null;
     }
 }

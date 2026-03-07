@@ -91,30 +91,66 @@ public class CategorizationService {
                                               ExtractedTransactionDTO headerRow,
                                               List<String> availableCategories) {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("You are a financial transaction categorizer. Categorize the following transactions into one of these categories: ");
+        prompt.append("You are a financial transaction categorizer. Analyze each transaction and categorize it into ONE of these EXACT categories:\n");
         prompt.append(String.join(", ", availableCategories)).append("\n\n");
+
+        prompt.append("IMPORTANT INSTRUCTIONS:\n");
+        prompt.append("- Return ONLY valid JSON objects, one per line\n");
+        prompt.append("- DO NOT include markdown code blocks (no ``` or ```json)\n");
+        prompt.append("- DO NOT add any explanatory text\n");
+        prompt.append("- Use ONLY the exact category names from the list above\n");
+        prompt.append("- Each line must be a valid JSON object in this exact format:\n");
+        prompt.append("{\"category\": \"CategoryName\", \"confidence\": \"HIGH\"}\n\n");
+
+        prompt.append("Confidence levels:\n");
+        prompt.append("- HIGH: Very certain match based on merchant name or clear description\n");
+        prompt.append("- MEDIUM: Reasonable match based on context\n");
+        prompt.append("- LOW: Uncertain, best guess\n\n");
+
+        prompt.append("Categorization logic:\n");
+        prompt.append("- Prioritize merchant/vendor names (Uber→Transportation, Zomato/Swiggy→Food, Spotify→Entertainment)\n");
+        prompt.append("- Use transaction description if merchant is empty\n");
+        prompt.append("- If both are empty, look at amount patterns and payment method\n");
+        prompt.append("- For salary/income transactions, use appropriate income category if available\n\n");
 
         // Include column header information for context
         if (headerRow != null) {
             prompt.append("Column Headers: ").append(headerRow.getRowValues()).append("\n\n");
         }
 
-        prompt.append("For each transaction, respond with ONLY a JSON object on a single line with this format:\n");
-        prompt.append("{\"category\": \"<category_name>\", \"confidence\": \"<HIGH|MEDIUM|LOW>\"}\n\n");
-        prompt.append("Rules:\n");
-        prompt.append("- Match based on transaction description, comments, vendor, amount patterns, or any other relevant details\n");
-        prompt.append("- Use confidence scores: HIGH for certain matches, MEDIUM for reasonable matches, LOW for uncertain matches\n");
-        prompt.append("- Respond with exactly one JSON object per transaction line\n");
-        prompt.append("- Use only the available categories listed above\n\n");
-        prompt.append("Transaction Data:\n");
+        prompt.append("Transactions to categorize:\n");
 
-        // Send only data rows (no headers)
+        // Send transaction details with mapped fields
         for (int i = 0; i < transactions.size(); i++) {
             ExtractedTransactionDTO tx = transactions.get(i);
-            prompt.append((i + 1)).append(". ").append(tx.getRowValues()).append("\n");
+            prompt.append((i + 1)).append(". ");
+
+            // Use mapped fields if available, otherwise use raw values
+            if (tx.getDate() != null) {
+                prompt.append("Date: ").append(tx.getDate()).append(" | ");
+            }
+            if (tx.getDescription() != null && !tx.getDescription().isEmpty()) {
+                prompt.append("Description: ").append(tx.getDescription()).append(" | ");
+            }
+            if (tx.getMerchant() != null && !tx.getMerchant().isEmpty()) {
+                prompt.append("Merchant: ").append(tx.getMerchant()).append(" | ");
+            }
+            if (tx.getAmount() != null) {
+                prompt.append("Amount: ").append(tx.getAmount()).append(" | ");
+            }
+            if (tx.getCurrency() != null && !tx.getCurrency().isEmpty()) {
+                prompt.append("Currency: ").append(tx.getCurrency()).append(" | ");
+            }
+            if (tx.getPaymentMethod() != null && !tx.getPaymentMethod().isEmpty()) {
+                prompt.append("Payment: ").append(tx.getPaymentMethod());
+            }
+
+            // Include raw values for additional context
+            prompt.append(" [Raw: ").append(tx.getRowValues()).append("]");
+            prompt.append("\n");
         }
 
-        prompt.append("\nRespond with one JSON object per line, in the same order as the rows above.\n");
+        prompt.append("\nReturn exactly ").append(transactions.size()).append(" JSON objects, one per line, no markdown:\n");
 
         return prompt.toString();
     }
@@ -163,14 +199,24 @@ public class CategorizationService {
 
         List<CategorizedTransactionDTO> result = new ArrayList<>();
 
+        // Remove markdown code blocks if present
+        String cleanedResponse = categorizationResponse
+                .replaceAll("```json\\s*", "")
+                .replaceAll("```\\s*", "")
+                .trim();
+
         // Split by newline and collect non-empty lines
-        String[] allLines = categorizationResponse.split("\\r?\\n");
+        String[] allLines = cleanedResponse.split("\\r?\\n");
         List<String> validLines = new ArrayList<>();
 
         for (String line : allLines) {
             String trimmed = line.trim();
-            // Skip empty lines and lines that are just whitespace
-            if (!trimmed.isEmpty() && !trimmed.matches("^\\s*$")) {
+            // Skip empty lines, whitespace-only, and markdown artifacts
+            if (!trimmed.isEmpty()
+                && !trimmed.matches("^\\s*$")
+                && !trimmed.equals("```")
+                && !trimmed.equals("```json")
+                && trimmed.startsWith("{")) {  // Only keep lines that start with JSON
                 validLines.add(trimmed);
             }
         }
@@ -180,8 +226,8 @@ public class CategorizationService {
         // Match each transaction with a response line
         for (int i = 0; i < transactions.size(); i++) {
             ExtractedTransactionDTO transaction = transactions.get(i);
-            String suggestedCategory = availableCategories.isEmpty() ? "Others" : availableCategories.get(0);
-            String confidence = "MEDIUM";
+            String suggestedCategory = availableCategories.isEmpty() ? "Uncategorized" : availableCategories.get(0);
+            String confidence = "LOW";
 
             // Parse response line if available
             if (i < validLines.size()) {
@@ -191,23 +237,35 @@ public class CategorizationService {
                 try {
                     JSONObject categoryJson = new JSONObject(line);
                     if (categoryJson.has("category")) {
-                        String categoryName = extractCategoryFromLine(categoryJson.getString("category"), availableCategories);
+                        String rawCategory = categoryJson.getString("category").trim();
+
+                        // Clean up any remaining markdown artifacts
+                        rawCategory = rawCategory.replaceAll("```json", "").replaceAll("```", "").trim();
+
+                        // Match against available categories
+                        String categoryName = extractCategoryFromLine(rawCategory, availableCategories);
                         if (categoryName != null) {
                             suggestedCategory = categoryName;
-                        } else {
-                            // Use the category as-is if it doesn't match available categories
-                            suggestedCategory = categoryJson.getString("category").trim();
+                        } else if (!rawCategory.isEmpty() && !rawCategory.equalsIgnoreCase("null")) {
+                            // Use the category as-is if it doesn't match but is valid
+                            suggestedCategory = rawCategory;
                         }
+
                         if (categoryJson.has("confidence")) {
                             confidence = categoryJson.getString("confidence").toUpperCase().trim();
+                            // Validate confidence level
+                            if (!confidence.equals("HIGH") && !confidence.equals("MEDIUM") && !confidence.equals("LOW")) {
+                                confidence = "MEDIUM";
+                            }
                         }
                     }
                     log.debug("Parsed JSON for transaction {}: category={}, confidence={}", i, suggestedCategory, confidence);
                 } catch (Exception e) {
                     // Not JSON, try plain text parsing with cleanup
-                    log.debug("Response line {} is not JSON, parsing as plain text: {}", i, line);
+                    log.debug("Response line {} is not valid JSON, parsing as plain text: {}", i, line);
                     String cleanedLine = line.replaceAll("^\\d+\\.\\s*", "").trim();
                     cleanedLine = cleanedLine.replaceAll("\\s+", " "); // Normalize whitespace
+                    cleanedLine = cleanedLine.replaceAll("```json", "").replaceAll("```", "").trim();
 
                     String categoryName = extractCategoryFromLine(cleanedLine, availableCategories);
                     if (categoryName != null) {
