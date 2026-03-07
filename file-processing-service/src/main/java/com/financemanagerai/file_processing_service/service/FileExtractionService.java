@@ -19,7 +19,7 @@ public class FileExtractionService {
 
     /**
      * Extract transactions from CSV file
-     * Do NOT treat first row specially; return all rows in order (first row may be headers)
+     * First row is treated as headers
      */
     public List<ExtractedTransactionDTO> extractTransactionsFromCSV(MultipartFile file) throws IOException {
         List<ExtractedTransactionDTO> transactions = new ArrayList<>();
@@ -27,18 +27,23 @@ public class FileExtractionService {
         try (InputStreamReader reader = new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8);
              CSVParser csvParser = new CSVParser(reader, CSVFormat.DEFAULT)) {
 
+            int rowIndex = 0;
             for (CSVRecord record : csvParser) {
                 List<String> rowValues = new ArrayList<>();
                 for (String value : record) {
                     rowValues.add(value);
                 }
 
+                // First row is always headers
+                boolean isHeader = (rowIndex == 0);
+
                 ExtractedTransactionDTO row = ExtractedTransactionDTO.builder()
-                        .isHeaderRow(false)
-                        .columnHeaders(null)
+                        .isHeaderRow(isHeader)
+                        .columnHeaders(isHeader ? rowValues : null)
                         .rowValues(rowValues)
                         .build();
                 transactions.add(row);
+                rowIndex++;
             }
         }
 
@@ -47,7 +52,7 @@ public class FileExtractionService {
 
     /**
      * Extract transactions from Excel file
-     * Do NOT treat first row specially; return all rows in order (first row may be headers)
+     * First row is treated as headers
      */
     public List<ExtractedTransactionDTO> extractTransactionsFromExcel(MultipartFile file) throws IOException {
         List<ExtractedTransactionDTO> transactions = new ArrayList<>();
@@ -62,6 +67,7 @@ public class FileExtractionService {
                 maxCols = Math.max(maxCols, row.getLastCellNum() <= 0 ? 0 : row.getLastCellNum());
             }
 
+            int rowIndex = 0;
             for (Row row : sheet) {
                 if (row == null) continue;
 
@@ -71,12 +77,16 @@ public class FileExtractionService {
                     rowValues.add(getCellValueAsString(cell));
                 }
 
+                // First row is always headers
+                boolean isHeader = (rowIndex == 0);
+
                 ExtractedTransactionDTO dataRow = ExtractedTransactionDTO.builder()
-                        .isHeaderRow(false)
-                        .columnHeaders(null)
+                        .isHeaderRow(isHeader)
+                        .columnHeaders(isHeader ? rowValues : null)
                         .rowValues(rowValues)
                         .build();
                 transactions.add(dataRow);
+                rowIndex++;
             }
         }
 

@@ -41,5 +41,5 @@ expense-service:
   url: http://localhost:8082
 
 genai-service:
-  url: http://localhost:8084
+  url: http://localhost:8089
 

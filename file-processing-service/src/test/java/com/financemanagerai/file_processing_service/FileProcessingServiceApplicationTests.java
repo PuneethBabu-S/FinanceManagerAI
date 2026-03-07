@@ -1,7 +1,5 @@
 package com.financemanagerai.file_processing_service;
 
-import com.financemanagerai.file_processing_service.dto.ExtractedTransactionDTO;
-import com.financemanagerai.file_processing_service.service.PDFExtractionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 

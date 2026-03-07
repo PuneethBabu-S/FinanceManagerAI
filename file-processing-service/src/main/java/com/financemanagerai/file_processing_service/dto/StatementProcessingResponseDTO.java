@@ -12,11 +12,13 @@ import java.util.List;
 public class StatementProcessingResponseDTO {
 
     private String statementId;
-    private String status; // PROCESSING, COMPLETED, FAILED
+    private String status; // EXTRACTED, CATEGORIZED, COMPLETED, FAILED
     private Long totalTransactionsExtracted;
     private Long totalTransactionsCategorized;
     private Long totalExpensesCreated;
     private List<String> errors;
     private String message;
+    private List<CategorizedTransactionDTO> categorizedTransactions; // For UI validation before expense creation
+
 }
 

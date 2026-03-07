@@ -26,17 +26,23 @@ public class GeminiService {
         try {
             HttpClient client = HttpClient.newHttpClient();
 
-            String jsonBody = """
-                {
-                  "contents": [
-                    {
-                      "parts": [
-                        {"text": "%s"}
-                      ]
-                    }
-                  ]
-                }
-                """.formatted(userQuery);
+            // Properly escape the user query for JSON
+            JSONObject part = new JSONObject();
+            part.put("text", userQuery);
+
+            JSONArray parts = new JSONArray();
+            parts.put(part);
+
+            JSONObject content = new JSONObject();
+            content.put("parts", parts);
+
+            JSONArray contents = new JSONArray();
+            contents.put(content);
+
+            JSONObject requestBody = new JSONObject();
+            requestBody.put("contents", contents);
+
+            String jsonBody = requestBody.toString();
 
             // Build endpoint dynamically based on model
             String endpoint = apiBaseUrl + "/" + modelName + ":generateContent?key=" + apiKey;
@@ -54,8 +60,8 @@ public class GeminiService {
             if (json.has("candidates")) {
                 JSONArray candidates = json.getJSONArray("candidates");
                 JSONObject firstCandidate = candidates.getJSONObject(0);
-                JSONArray parts = firstCandidate.getJSONObject("content").getJSONArray("parts");
-                return parts.getJSONObject(0).getString("text");
+                JSONArray responseParts = firstCandidate.getJSONObject("content").getJSONArray("parts");
+                return responseParts.getJSONObject(0).getString("text");
             } else if (json.has("error")) {
                 return "Gemini API error: " + json.getJSONObject("error").getString("message");
             } else {

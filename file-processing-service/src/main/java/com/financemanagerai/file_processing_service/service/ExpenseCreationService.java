@@ -4,6 +4,9 @@ import com.financemanagerai.file_processing_service.dto.CategorizedTransactionDT
 import org.json.JSONArray;
 import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -23,14 +26,22 @@ public class ExpenseCreationService {
     }
 
     /**
-     * Fetch available categories from expense service
+     * Fetch available categories from expense service with token authentication
      */
     public List<String> getAvailableCategories(String username, String token) {
         try {
             String endpoint = expenseServiceUrl + "/api/categories";
 
+            // Create headers with Bearer token
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + token);
+            headers.set("Content-Type", "application/json");
+
+            // Create HttpEntity with headers
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
             // Call expense service to get categories
-            String response = restTemplate.getForObject(endpoint, String.class);
+            String response = restTemplate.exchange(endpoint, HttpMethod.GET, entity, String.class).getBody();
 
             List<String> categories = new ArrayList<>();
             JSONArray jsonArray = new JSONArray(response);
@@ -51,13 +62,22 @@ public class ExpenseCreationService {
     }
 
     /**
-     * Get category ID by name from expense service
+     * Get category ID by name from expense service with token authentication
      */
     public Long getCategoryIdByName(String categoryName, String token) {
         try {
             String endpoint = expenseServiceUrl + "/api/categories";
 
-            String response = restTemplate.getForObject(endpoint, String.class);
+            // Create headers with Bearer token
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("Authorization", "Bearer " + token);
+            headers.set("Content-Type", "application/json");
+
+            // Create HttpEntity with headers
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            // Call expense service
+            String response = restTemplate.exchange(endpoint, HttpMethod.GET, entity, String.class).getBody();
             JSONArray jsonArray = new JSONArray(response);
 
             for (int i = 0; i < jsonArray.length(); i++) {

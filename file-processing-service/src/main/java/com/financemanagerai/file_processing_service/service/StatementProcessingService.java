@@ -63,32 +63,29 @@ public class StatementProcessingService {
                 }
             }
 
-//            // Step 2: Get available categories
-//            List<String> availableCategories = expenseCreationService.getAvailableCategories(username, token);
-//
-//            // Step 3: Batch categorize transactions (headers will help AI understand context)
-//            List<CategorizedTransactionDTO> categorizedTransactions =
-//                    categorizationService.categorizeBatch(extractedTransactions, availableCategories);
-//
-//            // Step 4: Create expenses in expense service
-//            List<Long> createdExpenseIds = expenseCreationService.createExpensesBatch(categorizedTransactions, username, token);
-//
-//            return StatementProcessingResponseDTO.builder()
-//                    .statementId(statementId)
-//                    .status("COMPLETED")
-//                    .totalTransactionsExtracted((long) extractedTransactions.size() - 1) // -1 for header row
-//                    .totalTransactionsCategorized((long) categorizedTransactions.size())
-//                    .totalExpensesCreated((long) createdExpenseIds.size())
-//                    .message("Statement processed successfully")
-//                    .errors(errors)
-//                    .build();
+            // Step 2: Get available categories from Expense Service
+            List<String> availableCategories = expenseCreationService.getAvailableCategories(username, token);
+            System.out.println("Available categories: " + availableCategories);
+
+            // Count actual data rows (excluding header row)
+            long dataRowCount = extractedTransactions.stream()
+                    .filter(tx -> !tx.isHeaderRow())
+                    .count();
+
+            // Step 3: Batch categorize transactions (headers will help AI understand context)
+            List<CategorizedTransactionDTO> categorizedTransactions =
+                    categorizationService.categorizeBatch(extractedTransactions, availableCategories, token);
+            System.out.println("Categorized " + categorizedTransactions.size() + " transactions");
+
+            // Step 4: Return categorized transactions for UI validation (no expense creation yet)
             return StatementProcessingResponseDTO.builder()
                     .statementId(statementId)
-                    .status("EXTRACTED")
-                    .totalTransactionsExtracted((long) extractedTransactions.size() - 1) // -1 for header row
-                    .totalTransactionsCategorized(0L)
+                    .status("CATEGORIZED")
+                    .totalTransactionsExtracted(dataRowCount)
+                    .totalTransactionsCategorized((long) categorizedTransactions.size())
                     .totalExpensesCreated(0L)
-                    .message("Statement extracted successfully, ready for categorization")
+                    .message("Statement processed and categorized successfully. Ready for UI validation before expense creation.")
+                    .categorizedTransactions(categorizedTransactions)
                     .errors(errors)
                     .build();
 

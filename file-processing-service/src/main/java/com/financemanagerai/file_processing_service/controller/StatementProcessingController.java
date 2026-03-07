@@ -2,11 +2,9 @@ package com.financemanagerai.file_processing_service.controller;
 
 import com.financemanagerai.file_processing_service.dto.StatementProcessingResponseDTO;
 import com.financemanagerai.file_processing_service.service.StatementProcessingService;
-//import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
@@ -19,15 +17,20 @@ public class StatementProcessingController {
         this.statementProcessingService = statementProcessingService;
     }
 
-//    private String getRequester(Authentication authentication) {
-//        return authentication.getName();
-//    }
-//
-//    private String getAuthToken(Authentication authentication) {
-//        // In a real scenario, extract the token from the JWT
-//        // For now, return a placeholder
-//        return "Bearer " + authentication.getPrincipal().toString();
-//    }
+    private String getRequester(Authentication authentication) {
+        return authentication.getName();
+    }
+
+    /**
+     * Extract the JWT token from authentication to pass to downstream services
+     */
+    private String getAuthToken(Authentication authentication) {
+        if (authentication instanceof JwtAuthenticationToken jwtAuth) {
+            return jwtAuth.getToken().getTokenValue();
+        }
+        // Fallback for other authentication types
+        return authentication.getCredentials() != null ? authentication.getCredentials().toString() : "";
+    }
 
     /**
      * Upload and process a bank statement file (CSV or Excel)
@@ -38,7 +41,7 @@ public class StatementProcessingController {
      */
     @PostMapping("/upload")
     public StatementProcessingResponseDTO uploadStatement(
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file, Authentication authentication) {
 
         // Validate file
         if (file.isEmpty()) {
@@ -56,7 +59,7 @@ public class StatementProcessingController {
         }
 
         // Process statement
-        return statementProcessingService.processStatement(file, "username", "token");
+        return statementProcessingService.processStatement(file, getRequester(authentication), getAuthToken(authentication));
     }
 
     private boolean isValidFile(String filename) {
